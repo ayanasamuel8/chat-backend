@@ -52,26 +52,26 @@ router.post('/login', async (req, res) => {
     // Basic email format validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email || !emailRegex.test(email)) {
-      return res.status(400).json({ error: 'Invalid email format' });
+      return res.status(400).json({ message: 'Invalid email format' });
     }
 
     if (!password) {
-      return res.status(400).json({ error: 'Password is required' });
+      return res.status(400).json({ message: 'Password is required' });
     }
 
     const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
     // Compare password using bcrypt
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ error: 'Invalid password' });
+      return res.status(401).json({ message: 'Invalid password' });
     }
 
-    const token = signToken(user._id.toString());
-    res.json({ user, token });
+    const access_token = signToken(user._id.toString());
+    res.json({ data: { ...user.toObject(), access_token } });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to login' });
+    res.status(500).json({ message: 'Failed to login' });
   }
 });
 
