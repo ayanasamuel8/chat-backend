@@ -17,7 +17,7 @@ app.get('/health', (_req, res) => res.json({ ok: true }));
 
 app.use('/api/chats', authenticateJWT, chatRoutes);
 
-app.use('/api/users', userRoutes);
+app.use('/api/auth', userRoutes);
 
 const server = http.createServer(app);
 const io = new Server(server, {
