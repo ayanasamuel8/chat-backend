@@ -23,7 +23,10 @@ router.post('/', async (req: Request, res: Response) => {
 
     const userA = toObjectId(currentUserId);
     const userB = toObjectId(userId || currentUserId);
-    if (!userA || !userB) return res.status(400).json({ error: 'Invalid user id' });
+    if (!userA || !userB) {
+      console.error('Invalid user IDs:', currentUserId, userId);
+      return res.status(400).json({ error: 'Invalid user id' });
+    }
 
     let chat = await Chat.findOne({
       $or: [
