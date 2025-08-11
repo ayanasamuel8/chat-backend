@@ -84,7 +84,24 @@ router.get('/', async (req: Request, res: Response) => {
       .populate('user1')
       .populate('user2');
 
-    res.json(chats);
+     const chatsWithUnreadCount = chats.map(chat => {
+      // Determine if the currently logged-in user is user1 or user2 for THIS chat
+      const isUser1 = (chat.user1 as any)._id.equals(currentOid);
+
+      // Select the correct unread count based on the user's position
+      const unreadCountForCurrentUser = isUser1 ? chat.unreadCount1 : chat.unreadCount2;
+
+      // Create a new object that includes everything from the original chat document,
+      // plus our new, unambiguous 'unreadCount' field.
+      const finalChatObject = {
+        ...chat,
+        unreadCount: unreadCountForCurrentUser,
+      };
+
+      return finalChatObject;
+    });
+
+    res.json(chatsWithUnreadCount);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch chats' });
   }
