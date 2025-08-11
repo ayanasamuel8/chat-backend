@@ -56,12 +56,12 @@ export function socketHandler(io: Server) {
         });
 
         await Chat.findByIdAndUpdate(data.chatId, {
-      lastMessage: data.content,
-      lastMessageTime: message.timestamp || new Date()
-    });
+          lastMessage: data.content,
+          lastMessageTime: message.timestamp || new Date()
+        });
 
-    
-    
+
+
         const populatedMsg = await Message.findById(message._id)
           .populate('sender')
           .populate({ path: 'chat', populate: ['user1', 'user2'] });
@@ -81,12 +81,25 @@ export function socketHandler(io: Server) {
         socket.emit('message:delivered', populatedMsg);
         console.log('Message delivered to sender:', senderId);
 
-        const getId = (u: ChatUser | string) => 
-        typeof u === 'string' ? u : String(u._id);
+        const getId = (u: ChatUser | string) =>
+          typeof u === 'string' ? u : String(u._id);
 
         const receiverId = getId(chat.user1) === String(senderId)
           ? getId(chat.user2)
           : getId(chat.user1);
+
+        // Determine which field to increment ('unreadCount1' or 'unreadCount2')
+        const unreadCountFieldToIncrement = getId(chat.user1) === receiverId
+          ? 'unreadCount1'
+          : 'unreadCount2';
+
+        // Now, update the chat document
+        await Chat.findByIdAndUpdate(data.chatId, {
+          lastMessage: data.content,
+          lastMessageTime: message.timestamp || new Date(),
+          // Use MongoDB's $inc operator to atomically increment the correct field
+          $inc: { [unreadCountFieldToIncrement]: 1 }
+        });
 
 
         io.to(receiverId).emit('message:received', populatedMsg);
@@ -107,6 +120,13 @@ export function socketHandler(io: Server) {
 
         const getId = (u: any) => u._id.toString();
         const otherUserId = getId(chat.user1) === readerId ? getId(chat.user2) : getId(chat.user1);
+
+        const unreadCountFieldToReset = getId(chat.user1) === readerId
+          ? 'unreadCount1'
+          : 'unreadCount2';
+        await Chat.findByIdAndUpdate(chatId, {
+          $set: { [unreadCountFieldToReset]: 0 }
+        });
 
         // Update all messages in this chat that were sent BY the other user
         // and are not yet marked as 'read'.

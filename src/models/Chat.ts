@@ -7,6 +7,8 @@ export interface IChat extends Document {
   user2: Types.ObjectId | IUser;
   lastMessage: string;
   lastMessageTime: Date;
+  unreadCount1: number;
+  unreadCount2: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -17,6 +19,14 @@ const chatSchema = new Schema<IChat>(
     user2: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     lastMessage: { type: String, default: "" },
     lastMessageTime: { type: Date, default: Date.now },
+    unreadCount1: {
+        type: Number,
+        default: 0
+      },
+    unreadCount2: {
+        type: Number,
+        default: 0
+      }
   },
   { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
 );
