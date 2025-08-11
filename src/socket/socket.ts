@@ -88,16 +88,13 @@ export function socketHandler(io: Server) {
           ? getId(chat.user2)
           : getId(chat.user1);
 
-        // Determine which field to increment ('unreadCount1' or 'unreadCount2')
         const unreadCountFieldToIncrement = getId(chat.user1) === receiverId
           ? 'unreadCount1'
           : 'unreadCount2';
 
-        // Now, update the chat document
         await Chat.findByIdAndUpdate(data.chatId, {
           lastMessage: data.content,
           lastMessageTime: message.timestamp || new Date(),
-          // Use MongoDB's $inc operator to atomically increment the correct field
           $inc: { [unreadCountFieldToIncrement]: 1 }
         });
 
