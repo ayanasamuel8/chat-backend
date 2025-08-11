@@ -75,49 +75,69 @@ router.get('/:chatId/messages', async (req: Request, res: Response) => {
   }
 });
 
-// Get all chats for current user
-router.get('/', async (req: Request, res: Response) => {
+// Initiate or get chat between current user and target
+router.post('/', async (req: Request, res: Response) => {
   try {
     const currentUserId = req.userId as string;
-    if (!currentUserId) return res.status(401).json({ error: 'Unauthorized' });
+    const { userId: targetUserId } = req.body as { userId?: string };
 
-    const currentOid = toObjectId(currentUserId);
-    if (!currentOid) return res.status(400).json({ error: 'Invalid user id' });
+    const userA = toObjectId(currentUserId);
+    const userB = toObjectId(targetUserId || currentUserId);
 
-    const chats = await Chat.find({
-      $or: [{ user1: currentOid }, { user2: currentOid }]
-    })
-      .populate('user1')
-      .populate('user2')
-      .sort({ lastMessageTime: -1 })
-      .lean();
+    if (!userA || !userB) {
+      return res.status(400).json({ error: 'Invalid user id' });
+    }
 
-     const chatsWithUnreadCount = chats.map(chat => {
-      // Determine if the currently logged-in user is user1 or user2 for THIS chat
-      const isUser1 = (chat.user1 as any)._id.equals(currentOid);
-
-      // Select the correct unread count based on the user's position
-      const unreadCountForCurrentUser = isUser1 ? chat.unreadCount1 : chat.unreadCount2;
-
-      // Create a new object that includes everything from the original chat document,
-      // plus our new, unambiguous 'unreadCount' field.
-      const finalChatObject = {
-        ...chat,
-        unreadCount: unreadCountForCurrentUser,
-      };
-
-      delete (finalChatObject as any).unreadCount1;
-      delete (finalChatObject as any).unreadCount2;
-
-      return finalChatObject;
+    // First, find or create the chat document.
+    let chatDoc = await Chat.findOne({
+      $or: [
+        { user1: userA, user2: userB },
+        { user1: userB, user2: userA },
+      ],
     });
 
-    res.json(chatsWithUnreadCount);
+    if (!chatDoc) {
+      chatDoc = await Chat.create({ user1: userA, user2: userB });
+    }
+    
+    // --- TRANSFORMATION LOGIC STARTS HERE ---
+    // Now, fetch the full, populated, and lean version of the chat for processing.
+    const chat = await Chat.findById(chatDoc._id)
+      .populate('user1', 'name email')
+      .populate('user2', 'name email')
+      .lean();
+
+    if (!chat) {
+        // This is a sanity check in case the chat was deleted between steps.
+        return res.status(404).json({ error: 'Chat not found after creation' });
+    }
+
+    // Determine if the currently logged-in user is user1 for THIS chat.
+    const isUser1 = (chat.user1 as any)._id.equals(userA);
+
+    // Select the correct unread count based on the user's position.
+    // Use '|| 0' as a safety net for any old documents without the fields.
+    const unreadCountForCurrentUser = (isUser1 ? chat.unreadCount1 : chat.unreadCount2) || 0;
+
+    // Create a new object that includes everything from the original chat document,
+    // plus our new, unambiguous 'unreadCount' field.
+    const clientFriendlyChat = {
+      ...chat,
+      unreadCount: unreadCountForCurrentUser,
+    };
+
+    // Remove the original, confusing fields before sending to the client.
+    delete (clientFriendlyChat as any).unreadCount1;
+    delete (clientFriendlyChat as any).unreadCount2;
+    // --- TRANSFORMATION LOGIC ENDS ---
+
+    res.json(clientFriendlyChat);
+
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch chats' });
+    console.error('Error in initiate chat route:', err);
+    res.status(500).json({ error: 'Failed to create/find chat' });
   }
 });
-
 // Get a chat (only if user is a participant)
 router.get('/:chatId', async (req: Request, res: Response) => {
   try {
