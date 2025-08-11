@@ -82,7 +82,9 @@ router.get('/', async (req: Request, res: Response) => {
       $or: [{ user1: currentOid }, { user2: currentOid }]
     })
       .populate('user1')
-      .populate('user2');
+      .populate('user2')
+      .sort({ lastMessageTime: -1 })
+      .lean();
 
      const chatsWithUnreadCount = chats.map(chat => {
       // Determine if the currently logged-in user is user1 or user2 for THIS chat
@@ -97,6 +99,9 @@ router.get('/', async (req: Request, res: Response) => {
         ...chat,
         unreadCount: unreadCountForCurrentUser,
       };
+
+      delete (finalChatObject as any).unreadCount1;
+      delete (finalChatObject as any).unreadCount2;
 
       return finalChatObject;
     });
