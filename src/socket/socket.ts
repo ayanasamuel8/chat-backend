@@ -6,6 +6,7 @@ import { Chat } from '../models/Chat';
 interface MessageSendPayload {
   chatId: string;
   content: string;
+  status: 'sent' | 'delivered' | 'read' | 'sending';
   type: 'text' | 'image' | 'video';
 }
 
@@ -50,6 +51,7 @@ export function socketHandler(io: Server) {
           sender: senderId,
           chat: data.chatId,
           content: data.content,
+          status: 'sent',
           type: data.type
         });
 
@@ -57,6 +59,8 @@ export function socketHandler(io: Server) {
       lastMessage: data.content,
       lastMessageTime: message.timestamp || new Date()
     });
+
+    
     
         const populatedMsg = await Message.findById(message._id)
           .populate('sender')
@@ -78,17 +82,53 @@ export function socketHandler(io: Server) {
         console.log('Message delivered to sender:', senderId);
 
         const getId = (u: ChatUser | string) => 
-  typeof u === 'string' ? u : String(u._id);
+        typeof u === 'string' ? u : String(u._id);
 
-const receiverId = getId(chat.user1) === String(senderId)
-  ? getId(chat.user2)
-  : getId(chat.user1);
+        const receiverId = getId(chat.user1) === String(senderId)
+          ? getId(chat.user2)
+          : getId(chat.user1);
 
 
         io.to(receiverId).emit('message:received', populatedMsg);
+        await Message.findByIdAndUpdate(message._id, { status: 'delivered' });
         console.log('Message sent to receiver:', receiverId);
       } catch (err) {
         console.error('Error in message:send handler:', err);
+      }
+    });
+    socket.on('chat:read', async ({ chatId }) => {
+      try {
+        const readerId = (socket as any).userId as string;
+        console.log(`User ${readerId} has read chat ${chatId}`);
+
+        // Find the other user in the chat
+        const chat = await Chat.findById(chatId);
+        if (!chat) return;
+
+        const getId = (u: any) => u._id.toString();
+        const otherUserId = getId(chat.user1) === readerId ? getId(chat.user2) : getId(chat.user1);
+
+        // Update all messages in this chat that were sent BY the other user
+        // and are not yet marked as 'read'.
+        const updateResult = await Message.updateMany(
+          {
+            chat: chatId,
+            sender: otherUserId,
+            status: { $ne: 'read' },
+          },
+          { $set: { status: 'read' } }
+        );
+
+        if (updateResult.modifiedCount > 0) {
+          console.log(`Updated ${updateResult.modifiedCount} messages to 'read'`);
+          // Notify the other user that their messages have been read
+          io.to(otherUserId).emit('messages:were_read', {
+            chatId: chatId,
+            readerId: readerId
+          });
+        }
+      } catch (err) {
+        console.error('Error in chat:read handler:', err);
       }
     });
   });
