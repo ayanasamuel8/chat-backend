@@ -38,6 +38,7 @@ router.post('/', async (req: Request, res: Response) => {
     if (!chat) {
       chat = await Chat.create({ user1: userA, user2: userB });
     }
+    console.log('Chat found or created:', chat);
 
     res.json(chat);
   } catch (err) {
