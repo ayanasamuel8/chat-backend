@@ -65,7 +65,7 @@ router.post('/', async (req: Request, res: Response) => {
     delete (clientFriendlyChat as any).unreadCount1;
     delete (clientFriendlyChat as any).unreadCount2;
     // --- TRANSFORMATION LOGIC ENDS ---
-
+    console.log('Chat initiated or found:', clientFriendlyChat);
     res.json(clientFriendlyChat);
 
   } catch (err) {
