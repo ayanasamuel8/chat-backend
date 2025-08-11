@@ -97,4 +97,43 @@ router.get('/', async (req, res) => {
   }
 });
 
+router.get('/search', async (req, res) => {
+  try {
+    // We get the user ID from the authentication middleware. This is essential.
+    const currentUserId = req.userId as string; 
+    
+    // Get the search term from the query parameters (e.g., ?name=Alice)
+    const { name } = req.query;
+
+    // If no search term is provided, return an empty array immediately.
+    if (!name || typeof name !== 'string' || name.trim() === '') {
+      return res.json([]);
+    }
+    
+    // Build the Mongoose query
+    const query = {
+      // Find users whose name contains the search query.
+      // '$regex' enables partial matching (like SQL's "LIKE").
+      // '$options: 'i'' makes the search case-insensitive.
+      name: { $regex: name, $options: 'i' }, 
+
+      // CRUCIAL: Exclude the current user from their own search results.
+      // '$ne' means "not equal to".
+      _id: { $ne: currentUserId } 
+    };
+
+    // Execute the query
+    const users = await User.find(query)
+      .select('name email profileImageUrl') // Only send back public-safe, necessary data
+      .limit(10); // Limit to 10 results for performance and a clean UI
+
+    // Send the results back to the client
+    res.json(users);
+
+  } catch (err) {
+    console.error("User search failed:", err);
+    res.status(500).json({ error: 'Failed to search for users' });
+  }
+});
+
 export default router;
