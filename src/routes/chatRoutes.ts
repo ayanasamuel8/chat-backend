@@ -38,9 +38,11 @@ router.post('/', async (req: Request, res: Response) => {
     if (!chat) {
       chat = await Chat.create({ user1: userA, user2: userB });
     }
-    console.log('Chat found or created:', chat);
+    const populatedChat = await Chat.findById(chat._id).populate('user1 user2');
+    console.log('Chat found or created:', populatedChat);
 
-    res.json(chat);
+    // Send the fully populated chat object
+    res.json(populatedChat);
   } catch (err) {
     res.status(500).json({ error: 'Failed to create/find chat' });
   }
