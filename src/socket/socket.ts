@@ -148,5 +148,44 @@ export function socketHandler(io: Server) {
         console.error('Error in chat:read handler:', err);
       }
     });
+
+    socket.on('call:initiate', (data: { receiverId: string; offer: any; callerInfo: any }) => {
+      console.log(`[Call] User ${userId} is calling ${data.receiverId}`);
+      io.to(data.receiverId).emit('call:incoming', {
+        callerId: userId,
+        callerInfo: data.callerInfo, // e.g., { name, profileImageUrl }
+        offer: data.offer, // The SDP offer from the caller
+      });
+    });
+
+    // Event when the receiver accepts the call
+    socket.on('call:accept', (data: { callerId: string; answer: any }) => {
+      console.log(`[Call] User ${userId} accepted call from ${data.callerId}`);
+      io.to(data.callerId).emit('call:accepted', {
+        receiverId: userId,
+        answer: data.answer, // The SDP answer from the receiver
+      });
+    });
+
+    // Event to exchange ICE candidates for NAT traversal
+    socket.on('call:ice_candidate', (data: { targetId: string; candidate: any }) => {
+      io.to(data.targetId).emit('call:ice_candidate', {
+        senderId: userId,
+        candidate: data.candidate,
+      });
+    });
+
+    // Event when a user rejects the call
+    socket.on('call:reject', (data: { callerId: string }) => {
+      console.log(`[Call] User ${userId} rejected call from ${data.callerId}`);
+      io.to(data.callerId).emit('call:rejected', {
+        receiverId: userId,
+      });
+    });
+
+    socket.on('call:end', (data: { targetId: string }) => {
+      console.log(`[Call] User ${userId} ended call with ${data.targetId}`);
+      io.to(data.targetId).emit('call:ended');
+    });
   });
 }

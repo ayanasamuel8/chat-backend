@@ -35,3 +35,5 @@ mongoose
     });
   })
   .catch((err) => console.error(err));
+
+export { app, server, io };

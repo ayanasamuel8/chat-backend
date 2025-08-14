@@ -3,6 +3,12 @@ import {User} from '../models/User';
 import { signToken } from '../middleware/auth';
 import { authenticateJWT } from '../middleware/auth';
 import bcrypt from 'bcrypt';
+import { createUploader } from '../utils/fileUploader';
+
+const profileImageUploader = createUploader({
+  limit: 20 * 1024 * 1024,
+  allowedTypes: ['image'],
+});
 
 const router = express.Router();
 
@@ -38,9 +44,9 @@ router.post('/register', async (req, res) => {
     await user.save();
 
     const token = signToken(user._id.toString());
-    res.status(201).json({ user, token });
+    res.status(201).json({ data: { user, access_token: token } });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to create user', statusCode: 500 });
+    res.status(500).json({ message: 'An unexpected error occurred while processing your signup.', statusCode: 500 });
   }
 });
 
@@ -60,7 +66,7 @@ router.post('/login', async (req, res) => {
     }
 
     const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ message: 'User not found', statusCode: 404 });
+    if (!user) return res.status(404).json({ message: `No account found for email: ${email}`, statusCode: 404 });
 
     // Compare password using bcrypt
     const isMatch = await bcrypt.compare(password, user.password);
@@ -71,7 +77,10 @@ router.post('/login', async (req, res) => {
     const access_token = signToken(user._id.toString());
     res.json({ data: { ...user.toObject(), access_token } });
   } catch (err) {
-    res.status(500).json({ message: 'Failed to login', statusCode: 500 });
+    res.status(500).json({
+      message: 'An unexpected error occurred while processing your login.',
+      statusCode: 500
+    });
   }
 });
 
@@ -88,7 +97,7 @@ router.get('/me', authenticateJWT, async (req, res) => {
 });
 
 // Get all users (optionally could be protected)
-router.get('/', async (req, res) => {
+router.get('/', authenticateJWT, async (req, res) => {
   try {
     const users = await User.find();
     res.json({ data: users });
@@ -97,7 +106,40 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.get('/search', async (req, res) => {
+router.post(
+  '/profile-image',
+  authenticateJWT,
+  profileImageUploader.single('profileImage'),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: 'No file was uploaded.' });
+      }
+      const currentUserId = req.userId as string;
+
+      const imageUrl = `https://your-cloud-storage.com/users/${currentUserId}/profile.jpg`;
+
+      const updatedUser = await User.findByIdAndUpdate(
+        currentUserId,
+        { profileImageUrl: imageUrl },
+        { new: true }
+      ).select('-password');
+
+      if (!updatedUser) {
+        return res.status(404).json({ message: 'User not found.' });
+      }
+
+      res.status(200).json({
+        message: 'Profile image updated successfully.',
+        data: updatedUser,
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: 'Server error during upload.', error: err.message });
+    }
+  }
+);
+
+router.get('/search', authenticateJWT, async (req, res) => {
   try {
     // We get the user ID from the authentication middleware. This is essential.
     const currentUserId = req.userId as string; 
@@ -128,11 +170,11 @@ router.get('/search', async (req, res) => {
       .limit(10); // Limit to 10 results for performance and a clean UI
 
     // Send the results back to the client
-    res.json(users);
+    res.status(200).json(users);
 
   } catch (err) {
     console.error("User search failed:", err);
-    res.status(500).json({ error: 'Failed to search for users' });
+    res.status(500).json({ message: 'Failed to search for users', statusCode: 500 });
   }
 });
 
